@@ -1,0 +1,103 @@
+---
+title: "HW2_STAT436_Edamula"
+output: html_document
+date: "2025-02-24"
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(shiny)
+library(dplyr)
+library(tidyr)
+library(readxl)
+library(ggplot2)
+```
+
+```{r}
+housing = read.csv('https://raw.githubusercontent.com/redamame-123/STAT-436/refs/heads/main/Housing.csv?token=GHSAT0AAAAAAC7QKLOYYDR5J7M6RXCIMUSSZ55FQZA')
+housing_clean <- housing %>%
+  select(price, area, bedrooms, bathrooms, stories, basement, guestroom, hotwaterheating, airconditioning)
+  
+housing_clean$guestroom <- ifelse(housing_clean$guestroom == "yes", 1, 0)
+housing_clean$basement <- ifelse(housing_clean$basement == "yes", 1, 0)
+housing_clean$hotwaterheating <- ifelse(housing_clean$hotwaterheating == "yes", 1, 0)
+housing_clean$airconditioning <- ifelse(housing_clean$airconditioning == "yes", 1, 0)
+```
+
+
+```{r eruptions, echo = FALSE}
+
+
+ui <- fluidPage(
+  titlePanel("Home Prices Based on Features"),
+  
+  numericInput("area", "Enter minimum square foot area", value = 0, 
+               min = min(housing_clean$area), max = max(housing_clean$area), step = 500),
+  
+  sliderInput("bedroom", "Enter the number of bedrooms", 
+              min = min(housing_clean$bedrooms), max = max(housing_clean$bedrooms), value = 3, step = 1),
+  
+  sliderInput("bathroom", "Enter the number of bathrooms", 
+              min = min(housing_clean$bathrooms), max = max(housing_clean$bathrooms), value = 2, step = 1),
+  
+  sliderInput("stories", "Enter the number of stories", 
+              min = min(housing_clean$stories), max = max(housing_clean$stories), value = 2, step = 1),
+  
+  checkboxInput("basement", "Include Basement", value = FALSE),
+  checkboxInput("guestroom", "Include Guest Room", value = FALSE),
+  checkboxInput("hotwater", "Include Hot Water Heating", value = FALSE),
+  checkboxInput("airconditioning", "Include Air Conditioning", value = FALSE),
+  
+  plotOutput("scatterPlot", click = "plot_click"),
+  dataTableOutput("selectedpoint"),
+  dataTableOutput("table")
+)
+
+# Define Server
+server <- function(input, output) {
+  
+  filtered_data <- reactive({
+    data_filtered <- housing_clean[housing_clean$area >= input$area & 
+                                   housing_clean$bedrooms == input$bedroom &  
+                                   housing_clean$bathrooms == input$bathroom & 
+                                   housing_clean$stories == input$stories, ]
+    
+    if (input$basement) data_filtered <- data_filtered[data_filtered$basement == 1, ]
+    if (input$guestroom) data_filtered <- data_filtered[data_filtered$guestroom == 1, ]
+    if (input$hotwater) data_filtered <- data_filtered[data_filtered$hotwaterheating == 1, ]
+    if (input$airconditioning) data_filtered <- data_filtered[data_filtered$airconditioning == 1, ]
+    
+    data_filtered <- data_filtered[order(data_filtered$price), ]
+    return(data_filtered)
+  })
+  
+  output$scatterPlot <- renderPlot({
+    ggplot(filtered_data(), aes(x = area, y = price)) +
+      geom_point(color = "red", alpha = 1, size = 4) +
+      labs(title = "Scatterplot of Housing Prices vs. Area",
+           x = "Area (sq. ft.)", y = "Price") +
+      theme_minimal()
+  })
+  
+  output$selectedpoint <- renderDataTable({req(input$plot_click)
+    nearPoints(filtered_data(), input$plot_click, xvar = "area", yvar = "price", threshold = 10)
+    
+  })
+
+  
+  output$table <- renderDataTable(filtered_data())
+  
+}
+
+# Run the app
+shinyApp(ui = ui, server = server)
+```
+
+
+
+

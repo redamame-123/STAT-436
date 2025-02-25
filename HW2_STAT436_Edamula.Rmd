@@ -19,7 +19,7 @@ library(ggplot2)
 ```
 
 ```{r}
-housing = read.csv('https://raw.githubusercontent.com/redamame-123/STAT-436/refs/heads/main/Housing.csv?token=GHSAT0AAAAAAC7QKLOYYDR5J7M6RXCIMUSSZ55FQZA')
+housing = read.csv('https://raw.githubusercontent.com/redamame-123/STAT-436/refs/heads/main/Housing.csv')
 housing_clean <- housing %>%
   select(price, area, bedrooms, bathrooms, stories, basement, guestroom, hotwaterheating, airconditioning)
   

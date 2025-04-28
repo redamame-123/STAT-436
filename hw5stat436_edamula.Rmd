@@ -1,0 +1,135 @@
+---
+title: "HW5_STAT436"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+
+```{r}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggrepel)
+library(pheatmap)
+library(superheat)
+library(embed)
+```
+
+
+```{r}
+health = read.csv("https://raw.githubusercontent.com/redamame-123/STAT-436/refs/heads/main/hw5data.csv")
+
+health_cleaned = health%>%
+  select(-'Series.Code')
+
+unique(health_cleaned$Series.Name)
+
+series_names <- health_cleaned$Series.Name[1:(length(health_cleaned$Series.Name) - 3)]
+
+unwanted_series = c("", "Data from database: Health Nutrition and Population Statistics", "Last Updated: 12/16/2024")
+
+health_cleaned_final <- health_cleaned%>%
+  filter(!Series.Name %in% unwanted_series) %>%
+  select(Country = `Country.Name`, `X2015..YR2015.`, Series.Name) %>%
+  pivot_wider(names_from = Series.Name, values_from = `X2015..YR2015.`)
+
+health_filter = health_cleaned_final%>%
+  mutate(across(everything(), ~ na_if(., "..")))%>%
+  drop_na()
+
+```
+
+```{r}
+pca_data <- health_filter %>%
+  select(-Country) %>%
+  mutate(across(everything(), as.numeric))
+
+pca_result <- prcomp(pca_data, center = TRUE, scale. = TRUE)
+```
+
+```{r}
+pca_result$rotation
+```
+
+```{r}
+clean_names <- c(
+  "Current health expenditure" = "Health expenditure",
+  "Hospital beds (per 1,000 people)" = "Hospital beds",
+  "Physicians (per 1,000 people)" = "Physicians",
+  "Nurses and midwives (per 1,000 people)" = "Nurses",
+  "Mortality from CVD, cancer, diabetes or CRD between exact ages 30 and 70 (%)" = "Mortality (30-70)",
+  "Mortality from CVD, cancer, diabetes or CRD between exact ages 30 and 70, male (%)" = "Mortality male (30-70)",
+  "Mortality from CVD, cancer, diabetes or CRD between exact ages 30 and 70, female (%)" = "Mortality female (30-70)",
+  "Prevalence of current tobacco use (% of adults)" = "Tobacco use",
+  "Prevalence of current tobacco use, males (% of male adults)" = "Tobacco use (male)",
+  "Prevalence of current tobacco use, females (% of female adults)" = "Tobacco use (female)",
+  "Total alcohol consumption per capita (liters of pure alcohol, projected estimates, 15+ years of age)" = "Alcohol use",
+  "Total alcohol consumption per capita, male (liters of pure alcohol, projected estimates, male 15+ years of age)" = "Alcohol use (male)",
+  "Total alcohol consumption per capita, female (liters of pure alcohol, projected estimates, female 15+ years of age)" = "Alcohol use (female)",
+  "School enrollment, secondary (% net)" = "School enrollment",
+  "School enrollment, secondary, male (% net)" = "School enrollment (male)",
+  "School enrollment, secondary, female (% net)" = "School enrollment (female)",
+  "Out-of-pocket expenditure (% of current health expenditure)" = "Out-of-pocket expenditure"
+)
+```
+
+```{r}
+scores <- as.data.frame(pca_result$x)
+scores$Country <- health_filter$Country
+
+
+loadings <- as.data.frame(pca_result$rotation)
+loadings$Variable <- rownames(loadings)
+
+loadings$Variable <- clean_names[loadings$Variable]
+
+ggplot(scores, aes(PC1, PC2, label = Country)) +
+  geom_point(alpha = 0.7) +
+  geom_text_repel(size = 3, max.overlaps = 10) +
+  geom_segment(data = loadings,
+               aes(x = 0, y = 0, xend = PC1 * 3, yend = PC2 * 3), 
+               arrow = arrow(length = unit(0.2, "cm")), color = "red", inherit.aes = FALSE) +
+  geom_label_repel(data = loadings,
+                 aes(x = PC1 * 3, y = PC2 * 3, label = Variable),
+                 color = "firebrick", size = 3,
+                 inherit.aes = FALSE,
+                 max.overlaps = 15,
+                 box.padding = 0.5)
+  #geom_text_repel(data = loadings, aes(x = PC1 * 5, y = PC2 * 5, label = Variable),
+                  #color = "red", size = 3, inherit.aes = FALSE) +
+  labs(title = "PCA Biplot of Health Indicators",
+       x = "PC1", y = "PC2") +
+  theme_minimal()
+```
+
+
+```{r}
+umap_data <- health_filter %>%
+  mutate(across(-Country, as.numeric))
+
+umap_rec <- recipe(~., data = umap_data) %>%
+  update_role(Country, new_role = "id") %>%         
+  step_normalize(all_predictors()) %>%              
+  step_umap(all_predictors(), neighbors = 20, min_dist = 0.1) 
+
+umap_prep <- prep(umap_rec)
+
+umap_results <- juice(umap_prep)
+
+# Plot UMAP results
+ggplot(umap_results, aes(x = UMAP1, y = UMAP2)) +
+  geom_point(alpha = 0.7, size = 1) +
+  geom_text(aes(label = Country), check_overlap = TRUE, size = 3, hjust = "inward") +
+  theme_minimal() +
+  labs(title = "UMAP Projection of Health Indicators by Country",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2")
+```
+
